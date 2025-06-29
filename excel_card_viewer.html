@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Peserta Lomba</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    .card {
+      perspective: 1000px;
+    }
+    .card-inner {
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+    }
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      backface-visibility: hidden;
+    }
+    .card-back {
+      transform: rotateY(180deg);
+    }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
+  <h1 class="text-2xl font-bold mb-4 text-center">Daftar Peserta</h1>
+
+  <div class="mb-6 text-center">
+    <input type="file" id="file-input" accept=".xlsx,.xls" class="border p-2 rounded" />
+  </div>
+
+  <div id="cards-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <!-- Kartu peserta akan ditampilkan di sini -->
+  </div>
+
+  <script>
+    function excelDateToJSDate(serial) {
+      const utc_days = Math.floor(serial - 25569);
+      const date_info = new Date(utc_days * 86400 * 1000);
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return date_info.toLocaleDateString('id-ID', options);
+    }
+
+    document.getElementById('file-input').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function (event) {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(sheet);
+
+        const groupedData = {};
+        json.forEach(row => {
+          const nama = row["Nama"];
+          const tanggalLahirRaw = row["Tanggal Lahir"];
+          const tanggal_lahir = typeof tanggalLahirRaw === 'number' 
+            ? excelDateToJSDate(tanggalLahirRaw) 
+            : tanggalLahirRaw;
+
+          if (!groupedData[nama]) {
+            groupedData[nama] = {
+              tanggal_lahir,
+              jenis_kelamin: row["Jenis Kelamin"],
+              kelompok: row["Kelompok Usia"],
+              nomor: []
+            };
+          }
+          groupedData[nama].nomor.push(row["Nomor perlombaan"]);
+        });
+
+        const container = document.getElementById('cards-container');
+        container.innerHTML = '';
+
+        Object.entries(groupedData).forEach(([nama, info]) => {
+          const card = document.createElement('div');
+          card.className = "card w-full h-60 bg-white rounded-xl shadow-lg cursor-pointer";
+          card.innerHTML = `
+            <div class="card-inner w-full h-full relative" onclick="this.parentElement.classList.toggle('flipped')">
+              <div class="card-front absolute w-full h-full p-4 flex flex-col justify-center items-start">
+                <h2 class="text-lg font-bold">${nama}</h2>
+                <p>Tanggal Lahir: ${info.tanggal_lahir}</p>
+                <p>Jenis Kelamin: ${info.jenis_kelamin}</p>
+                <p>Kelompok Usia: ${info.kelompok}</p>
+              </div>
+              <div class="card-back absolute w-full h-full p-4 bg-blue-100 rounded-xl flex flex-col justify-center items-start overflow-auto">
+                <h2 class="text-lg font-bold mb-2">Nomor Perlombaan</h2>
+                <ul class="list-disc list-inside">
+                  ${info.nomor.map(n => `<li>${n}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+  </script>
+</body>
+</html>
